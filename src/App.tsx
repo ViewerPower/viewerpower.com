@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Eye, TrendingUp, CheckCircle, Mail, Youtube, Zap } from 'lucide-react';
+
+// Declare turnstile on the window object for TypeScript
+declare global {
+  interface Window {
+    onTurnstileSuccess: (token: string) => void;
+    turnstile: {
+      reset: () => void;
+    };
+  }
+}
 
 function App() {
   const [formData, setFormData] = useState({
@@ -8,6 +18,22 @@ function App() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+
+  // This effect hook sets up the Turnstile callback function on the window object
+  // so the widget can call it. It cleans up after itself when the component unmounts.
+  useEffect(() => {
+    window.onTurnstileSuccess = (token: string) => {
+      console.log('Turnstile success:', token);
+      setTurnstileToken(token);
+    };
+    
+    return () => {
+      // @ts-ignore
+      delete window.onTurnstileSuccess;
+    }
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -18,35 +44,48 @@ function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnstileToken) {
+      setSubmitMessage('Please complete the security check.');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitMessage('');
 
+    // IMPORTANT: Replace this with the actual URL of your deployed Cloud Function.
+    const functionUrl = 'https://us-central1-viewerpowerearly.cloudfunctions.net/signupForEarlyAccess'; 
+
     try {
-      const response = await fetch('https://formspree.io/f/xnnvbzye', {
+      const response = await fetch(functionUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channelName: formData.channelName,
           email: formData.email,
-          _subject: 'New ViewerPower Early Access Registration'
+          token: turnstileToken,
         }),
       });
+
+      const result = await response.json();
 
       if (response.ok) {
         setSubmitMessage('Thank you for registering! We\'ll notify you when ViewerPower launches.');
         setFormData({ channelName: '', email: '' });
       } else {
-        setSubmitMessage('Something went wrong. Please try again.');
+        throw new Error(result.error || 'Something went wrong. Please try again.');
       }
-    } catch (error) {
-      setSubmitMessage('Something went wrong. Please try again.');
+    } catch (error: any) {
+      setSubmitMessage(`Error: ${error.message}`);
     } finally {
       setIsSubmitting(false);
+      // Reset the Turnstile widget so the user can submit again if needed.
+      if (window.turnstile) {
+        window.turnstile.reset();
+      }
+      setTurnstileToken(null);
     }
   };
-
+  
   const scrollToForm = () => {
     document.getElementById('early-access-form')?.scrollIntoView({ 
       behavior: 'smooth' 
@@ -195,7 +234,7 @@ function App() {
           </div>
         </div>
       </section>
-
+      
       {/* Early Access Form Section */}
       <section id="early-access-form" className="bg-white py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mx-auto text-center">
@@ -249,10 +288,17 @@ function App() {
               </div>
             </div>
 
+            {/* Turnstile Widget */}
+            <div 
+              className="cf-turnstile mx-auto" 
+              data-sitekey="0x4AAAAAABhxLd8XNUOwbpkS" 
+              data-callback="onTurnstileSuccess"
+            ></div>
+
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-12 rounded-lg text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:transform-none disabled:shadow-none"
+              disabled={isSubmitting || !turnstileToken}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-12 rounded-lg text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:transform-none disabled:shadow-none disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Submitting...' : 'Notify Me'}
             </button>
@@ -269,7 +315,7 @@ function App() {
           </p>
         </div>
       </section>
-
+      
       {/* Footer */}
       <footer className="bg-gray-800 text-gray-300 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto text-center">
