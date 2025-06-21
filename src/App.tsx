@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Eye, TrendingUp, CheckCircle, Mail, Youtube, Zap } from 'lucide-react';
 
-// Declare turnstile on the window object for TypeScript
+// For TypeScript: Declare the turnstile functions on the window object
+// to prevent "property does not exist" errors.
 declare global {
   interface Window {
     onTurnstileSuccess: (token: string) => void;
@@ -18,17 +19,18 @@ function App() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
+  // New state to hold the token from Cloudflare
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-
-  // This effect hook sets up the Turnstile callback function on the window object
-  // so the widget can call it. It cleans up after itself when the component unmounts.
+  // This `useEffect` hook runs once when the component mounts.
+  // It creates the global callback function that the Turnstile widget needs to call.
   useEffect(() => {
     window.onTurnstileSuccess = (token: string) => {
-      console.log('Turnstile success:', token);
-      setTurnstileToken(token);
+      console.log('Turnstile verification successful. Token:', token);
+      setTurnstileToken(token); // Store the token in our state
     };
     
+    // Cleanup function to remove the callback when the component unmounts
     return () => {
       // @ts-ignore
       delete window.onTurnstileSuccess;
@@ -42,8 +44,10 @@ function App() {
     });
   };
 
+  // This is the new, secure submission handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Don't submit if the user hasn't passed the Turnstile check
     if (!turnstileToken) {
       setSubmitMessage('Please complete the security check.');
       return;
@@ -52,8 +56,8 @@ function App() {
     setIsSubmitting(true);
     setSubmitMessage('');
 
-    // IMPORTANT: Replace this with the actual URL of your deployed Cloud Function.
-    const functionUrl = 'https://signupforearlyaccess-saq2cwjvmq-uc.a.run.app'; 
+    // **IMPORTANT**: Replace this with the URL you get after deploying your Firebase Function.
+    const functionUrl = 'https://us-central1-viewerpowerearly.cloudfunctions.net/signupForEarlyAccess'; 
 
     try {
       const response = await fetch(functionUrl, {
@@ -62,7 +66,7 @@ function App() {
         body: JSON.stringify({
           channelName: formData.channelName,
           email: formData.email,
-          token: turnstileToken,
+          token: turnstileToken, // Send the token to your backend for verification
         }),
       });
 
@@ -72,13 +76,14 @@ function App() {
         setSubmitMessage('Thank you for registering! We\'ll notify you when ViewerPower launches.');
         setFormData({ channelName: '', email: '' });
       } else {
+        // Use the error message from the backend if available
         throw new Error(result.error || 'Something went wrong. Please try again.');
       }
     } catch (error: any) {
       setSubmitMessage(`Error: ${error.message}`);
     } finally {
       setIsSubmitting(false);
-      // Reset the Turnstile widget so the user can submit again if needed.
+      // Reset the Turnstile widget so the form can be submitted again if needed
       if (window.turnstile) {
         window.turnstile.reset();
       }
@@ -288,7 +293,7 @@ function App() {
               </div>
             </div>
 
-            {/* Turnstile Widget */}
+            {/* The Turnstile Widget */}
             <div 
               className="cf-turnstile mx-auto" 
               data-sitekey="0x4AAAAAABhxLd8XNUOwbpkS" 
@@ -311,7 +316,7 @@ function App() {
           </form>
 
           <p className="text-sm text-gray-500 mt-6">
-            Join thousands of creators already waiting for ViewerPower to launch
+            Join other creators already waiting for ViewerPower to launch.
           </p>
         </div>
       </section>
