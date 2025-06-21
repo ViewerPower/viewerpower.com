@@ -53,7 +53,7 @@ function App() {
     setSubmitMessage('');
 
     // IMPORTANT: Replace this with the actual URL of your deployed Cloud Function.
-    const functionUrl = 'https://us-central1-viewerpowerearly.cloudfunctions.net/signupForEarlyAccess'; 
+    const functionUrl = 'https://signupforearlyaccess-saq2cwjvmq-uc.a.run.app'; 
 
     try {
       const response = await fetch(functionUrl, {
